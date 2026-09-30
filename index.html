@@ -127,26 +127,26 @@
       bottom: 24px;
       right: 20px;
       z-index: 1000;
-      width: 46px;
-      height: 46px;
+      width: 48px;
+      height: 48px;
       background: #ffffff;
       border-radius: 50%;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       border: none;
       outline: none;
-      font-size: 20px;
-      transition: background 0.2s, transform 0.1s;
+      font-size: 22px;
+      transition: transform 0.1s ease;
     }
 
     .locate-btn:active {
       transform: scale(0.92);
     }
 
-    /* Eigener Standort: Pulsierender blauer Punkt */
+    /* Pulsierender Standort-Marker */
     .user-location-marker {
       width: 16px;
       height: 16px;
@@ -163,23 +163,31 @@
       100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
     }
 
+    /* Spot-Popup & Buttons */
+    .spot-popup {
+      font-size: 13px;
+      min-width: 220px;
+    }
+
+    .spot-popup h4 {
+      margin: 0 0 8px 0;
+      color: #0f172a;
+      font-size: 15px;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 4px;
+    }
+
+    .spot-weather-info {
+      margin: 8px 0;
+      line-height: 1.5;
+    }
+
     .wind-badge {
       background: #e0f2fe;
       color: #0369a1;
       padding: 2px 6px;
       border-radius: 4px;
       font-weight: 700;
-    }
-
-    .spot-popup {
-      font-size: 13px;
-      min-width: 210px;
-    }
-
-    .spot-popup h4 {
-      margin: 0 0 6px 0;
-      color: #0f172a;
-      font-size: 15px;
     }
 
     .popup-actions {
@@ -192,23 +200,37 @@
     }
 
     .popup-btn {
-      display: inline-block;
+      display: block;
       text-decoration: none;
       font-size: 12px;
       font-weight: 600;
-      padding: 6px 10px;
+      padding: 7px 10px;
       border-radius: 6px;
       text-align: center;
-      transition: background 0.15s ease;
+      transition: opacity 0.15s ease;
     }
 
-    .btn-windy {
-      background: #ea580c;
+    .popup-btn:active {
+      opacity: 0.85;
+    }
+
+    .btn-navi-apple {
+      background: #0f172a;
+      color: #ffffff !important;
+    }
+
+    .btn-navi-google {
+      background: #16a34a;
       color: #ffffff !important;
     }
 
     .btn-windfinder {
       background: #0284c7;
+      color: #ffffff !important;
+    }
+
+    .btn-windy {
+      background: #ea580c;
       color: #ffffff !important;
     }
   </style>
@@ -248,7 +270,7 @@
     const searchResults = document.getElementById('searchResults');
     const locateBtn = document.getElementById('locateBtn');
 
-    // Standardansicht Europa / Nordsee
+    // Karte initialisieren (Standardfokus auf Nordeuropa)
     const map = L.map('map', {
       center: [53.8, 8.5],
       zoom: 7
@@ -268,24 +290,33 @@
     });
     map.addLayer(markers);
 
-    // Wetter-Popup
-    function attachForecastPopup(marker, lat, lon, name) {
+    // Wetter- & Navigations-Popup für Spots
+    function attachSpotPopup(marker, lat, lon, name) {
       marker.on('click', async () => {
+        const encodedName = encodeURIComponent(name);
+        
+        // Direkte Routen-URLs
+        const appleMapsUrl = `maps://?daddr=${lat},${lon}&q=${encodedName}`;
+        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+        
+        // Wind-Dienste
         const windfinderUrl = `https://www.windfinder.com/#11/${lat}/${lon}`;
         const windyUrl = `https://www.windy.com/?${lat},${lon},11`;
 
-        const baseContent = (windInfo) => `
+        const renderPopup = (windHtml) => `
           <div class="spot-popup">
             <h4>${name}</h4>
-            ${windInfo}
+            <div class="spot-weather-info">${windHtml}</div>
             <div class="popup-actions">
+              <a href="${appleMapsUrl}" class="popup-btn btn-navi-apple">🧭 Apple Karten Navigation</a>
+              <a href="${googleMapsUrl}" target="_blank" rel="noopener" class="popup-btn btn-navi-google">📍 Google Maps Route ↗</a>
               <a href="${windfinderUrl}" target="_blank" rel="noopener" class="popup-btn btn-windfinder">💨 Windfinder ↗</a>
               <a href="${windyUrl}" target="_blank" rel="noopener" class="popup-btn btn-windy">🌐 Windy ↗</a>
             </div>
           </div>
         `;
 
-        marker.bindPopup(baseContent('<p>Lade Winddaten...</p>')).openPopup();
+        marker.bindPopup(renderPopup('<em>Lade Winddaten...</em>')).openPopup();
 
         try {
           const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kn`);
@@ -293,19 +324,19 @@
           const cur = data.current;
 
           const windDetails = `
-            <p>Wind: <span class="wind-badge">${Math.round(cur.wind_speed_10m)} kn</span></p>
-            <p>Böen: <strong>${Math.round(cur.wind_gusts_10m)} kn</strong></p>
-            <p>Richtung: ${cur.wind_direction_10m}°</p>
+            Wind: <span class="wind-badge">${Math.round(cur.wind_speed_10m)} kn</span><br>
+            Böen: <strong>${Math.round(cur.wind_gusts_10m)} kn</strong><br>
+            Richtung: <strong>${cur.wind_direction_10m}°</strong>
           `;
 
-          marker.setPopupContent(baseContent(windDetails));
+          marker.setPopupContent(renderPopup(windDetails));
         } catch (err) {
-          marker.setPopupContent(baseContent('<p style="color: #ef4444;">Wetterdaten nicht erreichbar.</p>'));
+          marker.setPopupContent(renderPopup('<span style="color: #ef4444;">Wetterdaten nicht erreichbar</span>'));
         }
       });
     }
 
-    // Spots laden
+    // Spots aus SPOTS_DATA laden
     const spotRegistry = [];
     const markerList = [];
 
@@ -318,19 +349,19 @@
 
         const name = item.name || (item.tags && (item.tags.name || item.tags.description)) || "Kitespot";
         const marker = L.marker([lat, lon]);
-        attachForecastPopup(marker, lat, lon, name);
+        attachSpotPopup(marker, lat, lon, name);
         markerList.push(marker);
         spotRegistry.push({ name, lat, lon, marker });
       });
 
       markers.addLayers(markerList);
-      statusBadge.innerText = `✔ ${markerList.length.toLocaleString('de-DE')} Spots bereit`;
+      statusBadge.innerText = `✔ ${markerList.length.toLocaleString('de-DE')} Spots geladen`;
       setTimeout(() => { statusBadge.style.display = 'none'; }, 2500);
     } else {
-      statusBadge.innerText = "⚠️ 'spots.js' nicht geladen.";
+      statusBadge.innerText = "⚠️ Keine spots.js gefunden";
     }
 
-    // Standort-Marker
+    // Standort-Funktionalität
     let userMarker = null;
     let userAccuracyCircle = null;
 
@@ -343,7 +374,7 @@
 
     function locateUser(zoomToLocation = true) {
       if (!navigator.geolocation) {
-        alert("Geolocation wird von deinem Browser leider nicht unterstützt.");
+        alert("Geolocation wird von deinem Browser nicht unterstützt.");
         return;
       }
 
@@ -373,7 +404,6 @@
           }
 
           if (zoomToLocation) {
-            // Zoomt nah genug heran, sodass umliegende Spots sofort entclustert werden
             map.flyTo([lat, lon], 10, { duration: 1.5 });
           }
 
@@ -382,16 +412,16 @@
         },
         (err) => {
           statusBadge.style.display = 'none';
-          console.warn("Ortung fehlgeschlagen:", err.message);
+          console.warn("Standortabfrage verweigert oder nicht erreichbar:", err.message);
         },
         { enableHighAccuracy: true, timeout: 8000 }
       );
     }
 
-    // Automatische Ortung beim Start
+    // Beim Laden automatisch zentrieren
     locateUser(true);
 
-    // Klick auf den Zielkreuz-Button zentriert erneut
+    // Manuell per Klick auf den Zielkreuz-Button zentrieren
     locateBtn.addEventListener('click', () => {
       locateUser(true);
     });
@@ -410,7 +440,7 @@
         .slice(0, 10);
 
       if (matches.length === 0) {
-        searchResults.innerHTML = '<div class="result-item" style="color: #94a3b8; cursor: default;">Keine Spots gefunden</div>';
+        searchResults.innerHTML = '<div class="result-item" style="color: #94a3b8; cursor: default;">Keine Treffer</div>';
         searchResults.style.display = 'block';
         return;
       }
